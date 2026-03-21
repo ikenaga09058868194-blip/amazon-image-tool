@@ -73,7 +73,7 @@ Amazon価格: {price}
 {{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
 
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-1.5-flash",
         contents=prompt,
     )
     text = response.text.strip()
@@ -142,7 +142,7 @@ def test_gemini():
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
         client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model="gemini-2.0-flash", contents="こんにちは")
+        response = client.models.generate_content(model="gemini-1.5-flash", contents="こんにちは")
         return jsonify({"ok": True, "response": response.text[:100]})
     except Exception as e:
         return jsonify({"error": str(e)})
