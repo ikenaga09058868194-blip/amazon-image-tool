@@ -1,8 +1,10 @@
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, send_file
 import subprocess
 import os
 import glob
 import json
+import zipfile
+import io
 from pathlib import Path
 
 app = Flask(__name__)
@@ -89,6 +91,25 @@ def scrape_bulk():
 def serve_image(folder, filename):
     image_dir = OUTPUT_DIR / folder / "images"
     return send_from_directory(str(image_dir), filename)
+
+
+@app.route("/download_zip/<folder>")
+def download_zip(folder):
+    images_dir = OUTPUT_DIR / folder / "images"
+    if not images_dir.exists():
+        return jsonify({"error": "フォルダが見つかりません"}), 404
+
+    image_files = sorted(images_dir.glob("*.jpg")) + sorted(images_dir.glob("*.png"))
+    if not image_files:
+        return jsonify({"error": "画像がありません"}), 404
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for img in image_files:
+            zf.write(img, img.name)
+    buf.seek(0)
+
+    return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=f"{folder}_images.zip")
 
 
 if __name__ == "__main__":

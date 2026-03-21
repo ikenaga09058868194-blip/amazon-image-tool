@@ -108,6 +108,18 @@
                 t.textContent = data.title;
                 block.appendChild(t);
             }
+
+            // まとめてZIPダウンロードボタン
+            const folder = data.images.length > 0 ? data.images[0].split('/')[2] : '';
+            if (folder) {
+                const zipBtn = document.createElement('a');
+                zipBtn.href = `/download_zip/${folder}`;
+                zipBtn.className = 'btn btn-orange';
+                zipBtn.style.cssText = 'display:block;text-align:center;text-decoration:none;margin-bottom:12px;';
+                zipBtn.textContent = '📦 全画像をまとめて保存（ZIP）';
+                block.appendChild(zipBtn);
+            }
+
             const grid = document.createElement('div');
             grid.className = 'images-grid';
             data.images.forEach((src, i) => {
