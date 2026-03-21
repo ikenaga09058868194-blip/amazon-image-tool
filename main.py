@@ -230,6 +230,22 @@ async def cmd_scrape_only(args):
     scraper = AmazonScraper()
     product = await scraper.scrape(url, output_dir)
     print_product_summary(product)
+
+    # product_info.jsonを保存（app.pyが読み取る）
+    import json as _json
+    info_path = output_dir / "product_info.json"
+    info_path.write_text(_json.dumps({
+        "title": product.title,
+        "price": product.price,
+        "original_price": product.original_price,
+        "brand": product.brand,
+        "category": product.category,
+        "features": product.features,
+        "description": product.description,
+        "asin": product.asin,
+        "url": product.url,
+    }, ensure_ascii=False, indent=2), encoding="utf-8")
+
     print(f"\n✅ 画像と情報を保存しました: {output_dir}")
 
     # macOS環境のみAirDrop処理を実行

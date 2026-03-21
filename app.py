@@ -5,7 +5,9 @@ import glob
 import json
 import zipfile
 import io
+import re
 from pathlib import Path
+import anthropic
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).parent
@@ -15,6 +17,72 @@ OUTPUT_DIR = BASE_DIR / "output"
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+def generate_mercari_listing(product_info: dict) -> dict:
+    """Claude APIを使ってメルカリ出品文を生成"""
+    client = anthropic.Anthropic()
+
+    title = product_info.get("title", "")
+    price = product_info.get("price", "")
+    features = product_info.get("features", [])
+    description = product_info.get("description", "")
+    brand = product_info.get("brand", "")
+
+    features_text = "\n".join(f"- {f}" for f in features[:8]) if features else "情報なし"
+
+    prompt = f"""あなたはメルカリ出品の専門アシスタントです。以下の商品情報からメルカリ出品用のタイトルと説明文を作成してください。
+
+【商品情報】
+商品名: {title}
+ブランド: {brand}
+Amazon価格: {price}
+商品特徴:
+{features_text}
+商品説明: {description[:500] if description else "なし"}
+
+【執筆ルール】
+1. タイトル：必ず冒頭に「セール中！」をつけ、その後に商品名を記載（40文字以内）
+2. 購入時期：商品説明文の中に「購入時期」は記載しないこと
+3. 注意書き：必ず「※新品未使用品ですが、自宅保管のためパッケージに細かなスレ等がある場合がございます。完璧を求める方や神経質な方はご遠慮ください。」を入れること
+4. 発送：最後に「24時間以内に配送いたします」を記載
+5. 価格提案：市場相場を考慮しておすすめの販売価格（円）を数字のみで提示
+
+【構成テンプレート】
+タイトル例: セール中！【新品未使用】商品名...
+
+説明文の構成:
+【キャッチコピー】商品の概要・紹介。
+【商品状態】
+* 状態：新品・未使用
+* 内容量：...（わかる場合のみ）
+* 製造国：...（わかる場合のみ）
+※新品未使用品ですが、自宅保管のためパッケージに細かなスレ等がある場合がございます。完璧を求める方や神経質な方はご遠慮ください。
+【商品の特徴】
+* 特徴1：...
+* 特徴2：...
+* 特徴3：...
+【こんな方におすすめ】
+* ...
+* ...
+【発送について】
+* 24時間以内に配送いたします。
+* 匿名配送にて迅速・丁寧に発送いたします。
+
+以下のJSON形式のみで返答してください（他のテキストは不要）:
+{{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
+
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2000,
+        messages=[{"role": "user", "content": prompt}]
+    )
+
+    text = message.content[0].text
+    json_match = re.search(r'\{.*\}', text, re.DOTALL)
+    if json_match:
+        return json.loads(json_match.group())
+    return {"mercari_title": "", "mercari_description": "", "suggested_price": 0}
 
 
 def scrape_one(url):
@@ -46,10 +114,21 @@ def scrape_one(url):
         with open(info_file, "r", encoding="utf-8") as f:
             product_info = json.load(f)
 
+    # Claude APIで説明文生成
+    listing = {}
+    if product_info:
+        try:
+            listing = generate_mercari_listing(product_info)
+        except Exception as e:
+            print(f"説明文生成エラー: {e}")
+
     return {
         "success": True,
         "images": images,
         "title": product_info.get("title", ""),
+        "mercari_title": listing.get("mercari_title", ""),
+        "mercari_description": listing.get("mercari_description", ""),
+        "suggested_price": listing.get("suggested_price", 0),
         "url": url,
     }
 

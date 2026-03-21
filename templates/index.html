@@ -55,10 +55,21 @@
         .progress-item.error { background: #fff0f0; color: #cc0000; }
 
         .error-msg { background: #fff0f0; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #cc0000; font-size: 14px; margin-top: 10px; display: none; }
+
+        /* メルカリ説明文 */
+        .listing-section { background: white; border-radius: 12px; padding: 16px; margin-top: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .listing-section h3 { font-size: 15px; color: #ff6600; margin-bottom: 12px; border-bottom: 2px solid #ff6600; padding-bottom: 8px; }
+        .copy-block { margin-bottom: 16px; }
+        .copy-label { font-size: 12px; color: #666; margin-bottom: 6px; }
+        .copy-box { background: #f8f8f8; border: 1px solid #ddd; border-radius: 8px; padding: 12px; font-size: 13px; white-space: pre-wrap; word-break: break-all; line-height: 1.6; }
+        .copy-btn { width: 100%; border: none; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: bold; cursor: pointer; background: #34c759; color: white; margin-top: 6px; }
+        .copy-btn:active { opacity: 0.7; }
+        .copy-btn.copied { background: #888; }
+        .price-badge { display: inline-block; background: #ff3b30; color: white; border-radius: 8px; padding: 6px 14px; font-size: 16px; font-weight: bold; margin-bottom: 12px; }
     </style>
 </head>
 <body>
-    <header>🛍️ Amazon画像取得ツール</header>
+    <header>🛍️ Amazon → メルカリ出品ツール</header>
 
     <div class="tabs">
         <div class="tab active" onclick="switchTab('single')">1件取得</div>
@@ -72,9 +83,9 @@
                 <label>Amazon商品URLを貼り付け</label>
                 <textarea id="singleUrl" placeholder="https://www.amazon.co.jp/dp/..."></textarea>
                 <div class="error-msg" id="singleError"></div>
-                <button class="btn btn-orange" id="singleBtn" onclick="scrapeSingle()">📷 画像を取得する</button>
+                <button class="btn btn-orange" id="singleBtn" onclick="scrapeSingle()">📷 画像と説明文を取得する</button>
             </div>
-            <div class="status" id="singleStatus"><span class="spinner"></span>取得中...</div>
+            <div class="status" id="singleStatus"><span class="spinner"></span>取得中・説明文を生成中...</div>
             <div id="singleResult"></div>
         </div>
 
@@ -99,9 +110,21 @@
             document.getElementById('panel-' + name).classList.add('active');
         }
 
+        function copyText(text, btn) {
+            navigator.clipboard.writeText(text).then(() => {
+                btn.textContent = '✅ コピーしました！';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 タップしてコピー';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
         function renderImages(data) {
             const block = document.createElement('div');
             block.className = 'product-block';
+
             if (data.title) {
                 const t = document.createElement('div');
                 t.className = 'product-title';
@@ -130,7 +153,56 @@
                     </div>`;
             });
             block.appendChild(grid);
+
+            // メルカリ出品文セクション
+            if (data.mercari_title || data.mercari_description) {
+                const section = document.createElement('div');
+                section.className = 'listing-section';
+                section.innerHTML = '<h3>📝 メルカリ出品文</h3>';
+
+                // 推奨価格
+                if (data.suggested_price) {
+                    const price = document.createElement('div');
+                    price.innerHTML = `<div class="price-badge">💴 推奨価格：¥${Number(data.suggested_price).toLocaleString()}</div>`;
+                    section.appendChild(price);
+                }
+
+                // タイトル
+                if (data.mercari_title) {
+                    const titleBlock = document.createElement('div');
+                    titleBlock.className = 'copy-block';
+                    titleBlock.innerHTML = `<div class="copy-label">■ タイトル（タップしてコピー）</div>
+                        <div class="copy-box">${escapeHtml(data.mercari_title)}</div>`;
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = '📋 タップしてコピー';
+                    btn.onclick = () => copyText(data.mercari_title, btn);
+                    titleBlock.appendChild(btn);
+                    section.appendChild(titleBlock);
+                }
+
+                // 説明文
+                if (data.mercari_description) {
+                    const descBlock = document.createElement('div');
+                    descBlock.className = 'copy-block';
+                    descBlock.innerHTML = `<div class="copy-label">■ 商品説明（タップしてコピー）</div>
+                        <div class="copy-box">${escapeHtml(data.mercari_description)}</div>`;
+                    const btn = document.createElement('button');
+                    btn.className = 'copy-btn';
+                    btn.textContent = '📋 タップしてコピー';
+                    btn.onclick = () => copyText(data.mercari_description, btn);
+                    descBlock.appendChild(btn);
+                    section.appendChild(descBlock);
+                }
+
+                block.appendChild(section);
+            }
+
             return block;
+        }
+
+        function escapeHtml(text) {
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
         }
 
         async function scrapeSingle() {
@@ -173,7 +245,6 @@
             result.innerHTML = '';
             btn.disabled = true;
 
-            // 進捗表示
             progress.innerHTML = urls.map((u, i) =>
                 `<div class="progress-item waiting" id="prog-${i}">⏳ ${i+1}件目: ${u.substring(0, 40)}...</div>`
             ).join('');
