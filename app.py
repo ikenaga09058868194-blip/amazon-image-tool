@@ -133,6 +133,21 @@ def scrape_one(url):
     }
 
 
+@app.route("/test_gemini")
+def test_gemini():
+    import os
+    try:
+        from google import genai
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if not api_key:
+            return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
+        client = genai.Client(api_key=api_key)
+        response = client.models.generate_content(model="gemini-2.0-flash", contents="こんにちは")
+        return jsonify({"ok": True, "response": response.text[:100]})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route("/scrape", methods=["POST"])
 def scrape():
     data = request.get_json()
