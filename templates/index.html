@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon画像取得ツール</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f2f2f7; min-height: 100vh; }
+
+        header { background: #ff6600; color: white; padding: 16px 20px; text-align: center; font-size: 18px; font-weight: bold; }
+
+        .tabs { display: flex; background: white; border-bottom: 1px solid #ddd; }
+        .tab { flex: 1; padding: 12px; text-align: center; font-size: 15px; cursor: pointer; color: #666; border-bottom: 3px solid transparent; }
+        .tab.active { color: #ff6600; border-bottom-color: #ff6600; font-weight: bold; }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 16px; }
+
+        .panel { display: none; }
+        .panel.active { display: block; }
+
+        .card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+
+        label { font-size: 13px; color: #666; margin-bottom: 8px; display: block; }
+
+        textarea {
+            width: 100%; border: 1px solid #ddd; border-radius: 8px;
+            padding: 12px; font-size: 14px; resize: none; outline: none;
+        }
+        textarea:focus { border-color: #ff6600; }
+        #singleUrl { height: 80px; }
+        #bulkUrls { height: 160px; }
+
+        .btn { width: 100%; border: none; border-radius: 10px; padding: 15px; font-size: 17px; font-weight: bold; margin-top: 12px; cursor: pointer; transition: opacity 0.2s; }
+        .btn-orange { background: #ff6600; color: white; }
+        .btn-orange:active { opacity: 0.7; }
+        .btn-orange:disabled { background: #ccc; }
+
+        .status { text-align: center; padding: 12px; font-size: 14px; color: #666; display: none; }
+        .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid #ddd; border-top-color: #ff6600; border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 6px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .product-block { margin-bottom: 20px; }
+        .product-title { font-size: 13px; color: #333; margin-bottom: 10px; padding: 10px 12px; background: #fff8f0; border-left: 3px solid #ff6600; border-radius: 4px; }
+
+        .images-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .image-card { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .image-card img { width: 100%; aspect-ratio: 1; object-fit: contain; background: #f9f9f9; display: block; }
+        .image-card a { display: block; text-align: center; padding: 8px 4px; background: #f2f2f7; color: #ff6600; font-size: 12px; font-weight: bold; text-decoration: none; }
+
+        .progress-item { padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; font-size: 14px; }
+        .progress-item.waiting { background: #f2f2f7; color: #666; }
+        .progress-item.loading { background: #fff8e8; color: #cc7700; }
+        .progress-item.done { background: #f0fff0; color: #008800; }
+        .progress-item.error { background: #fff0f0; color: #cc0000; }
+
+        .error-msg { background: #fff0f0; border: 1px solid #ffcccc; border-radius: 8px; padding: 12px; color: #cc0000; font-size: 14px; margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <header>🛍️ Amazon画像取得ツール</header>
+
+    <div class="tabs">
+        <div class="tab active" onclick="switchTab('single')">1件取得</div>
+        <div class="tab" onclick="switchTab('bulk')">一括取得</div>
+    </div>
+
+    <div class="container">
+        <!-- 1件取得 -->
+        <div class="panel active" id="panel-single">
+            <div class="card">
+                <label>Amazon商品URLを貼り付け</label>
+                <textarea id="singleUrl" placeholder="https://www.amazon.co.jp/dp/..."></textarea>
+                <div class="error-msg" id="singleError"></div>
+                <button class="btn btn-orange" id="singleBtn" onclick="scrapeSingle()">📷 画像を取得する</button>
+            </div>
+            <div class="status" id="singleStatus"><span class="spinner"></span>取得中...</div>
+            <div id="singleResult"></div>
+        </div>
+
+        <!-- 一括取得 -->
+        <div class="panel" id="panel-bulk">
+            <div class="card">
+                <label>URLを1行に1つずつ貼り付け（何件でもOK）</label>
+                <textarea id="bulkUrls" placeholder="https://www.amazon.co.jp/dp/AAA&#10;https://www.amazon.co.jp/dp/BBB&#10;https://www.amazon.co.jp/dp/CCC"></textarea>
+                <div class="error-msg" id="bulkError"></div>
+                <button class="btn btn-orange" id="bulkBtn" onclick="scrapeBulk()">📦 一括取得する</button>
+            </div>
+            <div class="status" id="bulkStatus"><span class="spinner"></span>取得中...</div>
+            <div id="bulkProgress"></div>
+            <div id="bulkResult"></div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === (name === 'single' ? 0 : 1)));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.getElementById('panel-' + name).classList.add('active');
+        }
+
+        function renderImages(data) {
+            const block = document.createElement('div');
+            block.className = 'product-block';
+            if (data.title) {
+                const t = document.createElement('div');
+                t.className = 'product-title';
+                t.textContent = data.title;
+                block.appendChild(t);
+            }
+            const grid = document.createElement('div');
+            grid.className = 'images-grid';
+            data.images.forEach((src, i) => {
+                grid.innerHTML += `
+                    <div class="image-card">
+                        <img src="${src}" loading="lazy">
+                        <a href="${src}" download="image_${i+1}.jpg">⬇️ 保存</a>
+                    </div>`;
+            });
+            block.appendChild(grid);
+            return block;
+        }
+
+        async function scrapeSingle() {
+            const url = document.getElementById('singleUrl').value.trim();
+            const btn = document.getElementById('singleBtn');
+            const status = document.getElementById('singleStatus');
+            const result = document.getElementById('singleResult');
+            const errorMsg = document.getElementById('singleError');
+
+            if (!url) { showError('singleError', 'URLを入力してください'); return; }
+            errorMsg.style.display = 'none';
+            result.innerHTML = '';
+            btn.disabled = true;
+            status.style.display = 'block';
+
+            try {
+                const res = await fetch('/scrape', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ url })
+                });
+                const data = await res.json();
+                if (data.error) { showError('singleError', data.error); return; }
+                result.appendChild(renderImages(data));
+            } catch(e) { showError('singleError', '通信エラー'); }
+            finally { btn.disabled = false; status.style.display = 'none'; }
+        }
+
+        async function scrapeBulk() {
+            const raw = document.getElementById('bulkUrls').value;
+            const urls = raw.split('\n').map(u => u.trim()).filter(u => u);
+            const btn = document.getElementById('bulkBtn');
+            const status = document.getElementById('bulkStatus');
+            const progress = document.getElementById('bulkProgress');
+            const result = document.getElementById('bulkResult');
+            const errorMsg = document.getElementById('bulkError');
+
+            if (!urls.length) { showError('bulkError', 'URLを入力してください'); return; }
+            errorMsg.style.display = 'none';
+            result.innerHTML = '';
+            btn.disabled = true;
+
+            // 進捗表示
+            progress.innerHTML = urls.map((u, i) =>
+                `<div class="progress-item waiting" id="prog-${i}">⏳ ${i+1}件目: ${u.substring(0, 40)}...</div>`
+            ).join('');
+            status.style.display = 'block';
+
+            for (let i = 0; i < urls.length; i++) {
+                document.getElementById(`prog-${i}`).className = 'progress-item loading';
+                document.getElementById(`prog-${i}`).textContent = `🔄 ${i+1}件目を取得中...`;
+
+                try {
+                    const res = await fetch('/scrape', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url: urls[i] })
+                    });
+                    const data = await res.json();
+                    if (data.error) {
+                        document.getElementById(`prog-${i}`).className = 'progress-item error';
+                        document.getElementById(`prog-${i}`).textContent = `❌ ${i+1}件目: ${data.error}`;
+                    } else {
+                        document.getElementById(`prog-${i}`).className = 'progress-item done';
+                        document.getElementById(`prog-${i}`).textContent = `✅ ${i+1}件目: 完了`;
+                        result.appendChild(renderImages(data));
+                    }
+                } catch(e) {
+                    document.getElementById(`prog-${i}`).className = 'progress-item error';
+                    document.getElementById(`prog-${i}`).textContent = `❌ ${i+1}件目: 通信エラー`;
+                }
+            }
+
+            btn.disabled = false;
+            status.style.display = 'none';
+        }
+
+        function showError(id, msg) {
+            const el = document.getElementById(id);
+            el.textContent = msg;
+            el.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
