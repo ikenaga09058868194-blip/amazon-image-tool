@@ -232,8 +232,10 @@ async def cmd_scrape_only(args):
     print_product_summary(product)
     print(f"\n✅ 画像と情報を保存しました: {output_dir}")
 
-    # 画像フォルダをFinderで開いて全選択
-    open_and_select_for_airdrop(output_dir / "images")
+    # macOS環境のみAirDrop処理を実行
+    import platform
+    if platform.system() == "Darwin":
+        open_and_select_for_airdrop(output_dir / "images")
 
 
 async def cmd_list_mercari(args):
