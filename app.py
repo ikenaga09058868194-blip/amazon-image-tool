@@ -115,6 +115,9 @@ def scrape_one(url):
     if product_info:
         try:
             listing = generate_mercari_listing(product_info)
+            listing_file = latest / "mercari_listing.json"
+            with open(listing_file, "w", encoding="utf-8") as f:
+                json.dump(listing, f, ensure_ascii=False, indent=2)
         except Exception as e:
             print(f"説明文生成エラー: {e}")
 
@@ -203,6 +206,37 @@ def download_zip(folder):
     buf.seek(0)
 
     return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=f"{folder}_images.zip")
+
+
+@app.route("/api/latest_product")
+def latest_product():
+    """最新の商品データをJSONで返す（Tampermonkey用）"""
+    folders = sorted(OUTPUT_DIR.glob("product_*"))
+    if not folders:
+        return jsonify({"error": "商品データがありません"}), 404
+    latest = folders[-1]
+    info_file = latest / "product_info.json"
+    product_info = {}
+    if info_file.exists():
+        with open(info_file, "r", encoding="utf-8") as f:
+            product_info = json.load(f)
+    listing_file = latest / "mercari_listing.json"
+    listing = {}
+    if listing_file.exists():
+        with open(listing_file, "r", encoding="utf-8") as f:
+            listing = json.load(f)
+    images_dir = latest / "images"
+    image_files = sorted(images_dir.glob("*.jpg")) + sorted(images_dir.glob("*.png"))
+    image_urls = [f"https://amazon-image-tool.onrender.com/images/{latest.name}/{img.name}" for img in image_files]
+    response = jsonify({
+        "title": listing.get("mercari_title", product_info.get("title", "")),
+        "description": listing.get("mercari_description", ""),
+        "price": listing.get("suggested_price", 0),
+        "images": image_urls,
+        "folder": latest.name,
+    })
+    response.headers.add("Access-Control-Allow-Origin", "*")
+    return response
 
 
 if __name__ == "__main__":
