@@ -20,15 +20,15 @@ def index():
 def generate_mercari_listing(product_info: dict) -> dict:
     """Gemini APIを使ってメルカリ出品文を生成（無料枠あり）"""
     import re
-    import os
-    from google import genai
+    import google.generativeai as genai
 
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         print("GEMINI_API_KEY が設定されていません")
         return {"mercari_title": "", "mercari_description": "", "suggested_price": 0}
 
-    client = genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     title = product_info.get("title", "")
     price = product_info.get("price", "")
@@ -72,10 +72,7 @@ Amazon価格: {price}
 以下のJSON形式のみで返答してください（マークダウン不要）:
 {{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
 
-    response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=prompt,
-    )
+    response = model.generate_content(prompt)
     text = response.text.strip()
     text = re.sub(r'^```json\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
@@ -114,7 +111,6 @@ def scrape_one(url):
         with open(info_file, "r", encoding="utf-8") as f:
             product_info = json.load(f)
 
-    # Claude APIで説明文生成
     listing = {}
     if product_info:
         try:
@@ -135,14 +131,14 @@ def scrape_one(url):
 
 @app.route("/test_gemini")
 def test_gemini():
-    import os
     try:
-        from google import genai
+        import google.generativeai as genai
         api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
-        client = genai.Client(api_key=api_key)
-        response = client.models.generate_content(model="gemini-1.5-flash", contents="こんにちは")
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content("こんにちは")
         return jsonify({"ok": True, "response": response.text[:100]})
     except Exception as e:
         return jsonify({"error": str(e)})
