@@ -136,13 +136,13 @@ def test_gemini():
         api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
-        url_api = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
-        payload = {"contents": [{"parts": [{"text": "こんにちは"}]}]}
-        resp = requests.post(url_api, json=payload, timeout=30)
+        # 使えるモデルを一覧表示
+        list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        resp = requests.get(list_url, timeout=30)
         if resp.status_code != 200:
-            return jsonify({"error": f"{resp.status_code}: {resp.text[:300]}"})
-        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-        return jsonify({"ok": True, "response": text[:100]})
+            return jsonify({"error": f"モデル一覧取得失敗: {resp.status_code}: {resp.text[:300]}"})
+        models = [m["name"] for m in resp.json().get("models", []) if "generateContent" in m.get("supportedGenerationMethods", [])]
+        return jsonify({"available_models": models})
     except Exception as e:
         return jsonify({"error": str(e)})
 
