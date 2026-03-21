@@ -5,9 +5,7 @@ import glob
 import json
 import zipfile
 import io
-import re
 from pathlib import Path
-import anthropic
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).parent
@@ -20,69 +18,63 @@ def index():
 
 
 def generate_mercari_listing(product_info: dict) -> dict:
-    """Claude APIを使ってメルカリ出品文を生成"""
-    client = anthropic.Anthropic()
-
+    """テンプレートを使ってメルカリ出品文を生成（API不要）"""
     title = product_info.get("title", "")
     price = product_info.get("price", "")
     features = product_info.get("features", [])
     description = product_info.get("description", "")
     brand = product_info.get("brand", "")
 
-    features_text = "\n".join(f"- {f}" for f in features[:8]) if features else "情報なし"
+    # タイトル生成（40文字以内に収める）
+    short_title = title[:30] if len(title) > 30 else title
+    mercari_title = f"セール中！【新品未使用】{short_title}"
 
-    prompt = f"""あなたはメルカリ出品の専門アシスタントです。以下の商品情報からメルカリ出品用のタイトルと説明文を作成してください。
+    # 特徴リスト
+    features_text = ""
+    for f in features[:5]:
+        f = f.strip()
+        if f:
+            features_text += f"* {f[:60]}\n"
+    if not features_text:
+        features_text = "* 詳細はAmazon商品ページをご参照ください。\n"
 
-【商品情報】
-商品名: {title}
-ブランド: {brand}
-Amazon価格: {price}
-商品特徴:
-{features_text}
-商品説明: {description[:500] if description else "なし"}
+    # 商品概要
+    summary = description[:100].strip() if description else f"{brand or title}の商品です。"
 
-【執筆ルール】
-1. タイトル：必ず冒頭に「セール中！」をつけ、その後に商品名を記載（40文字以内）
-2. 購入時期：商品説明文の中に「購入時期」は記載しないこと
-3. 注意書き：必ず「※新品未使用品ですが、自宅保管のためパッケージに細かなスレ等がある場合がございます。完璧を求める方や神経質な方はご遠慮ください。」を入れること
-4. 発送：最後に「24時間以内に配送いたします」を記載
-5. 価格提案：市場相場を考慮しておすすめの販売価格（円）を数字のみで提示
+    # 推奨価格（Amazon価格の80%を目安）
+    suggested_price = 0
+    if price:
+        import re
+        nums = re.findall(r'[\d,]+', price)
+        if nums:
+            try:
+                amazon_price = int(nums[0].replace(',', ''))
+                suggested_price = int(amazon_price * 0.8)
+            except Exception:
+                pass
 
-【構成テンプレート】
-タイトル例: セール中！【新品未使用】商品名...
+    mercari_description = f"""{summary}新品・未使用品をお届けします。
 
-説明文の構成:
-【キャッチコピー】商品の概要・紹介。
 【商品状態】
 * 状態：新品・未使用
-* 内容量：...（わかる場合のみ）
-* 製造国：...（わかる場合のみ）
 ※新品未使用品ですが、自宅保管のためパッケージに細かなスレ等がある場合がございます。完璧を求める方や神経質な方はご遠慮ください。
+
 【商品の特徴】
-* 特徴1：...
-* 特徴2：...
-* 特徴3：...
+{features_text}
 【こんな方におすすめ】
-* ...
-* ...
+* 品質の良い商品をお探しの方
+* コスパ重視の方
+* プレゼントにお探しの方
+
 【発送について】
 * 24時間以内に配送いたします。
-* 匿名配送にて迅速・丁寧に発送いたします。
+* 匿名配送にて迅速・丁寧に発送いたします。"""
 
-以下のJSON形式のみで返答してください（他のテキストは不要）:
-{{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-        messages=[{"role": "user", "content": prompt}]
-    )
-
-    text = message.content[0].text
-    json_match = re.search(r'\{.*\}', text, re.DOTALL)
-    if json_match:
-        return json.loads(json_match.group())
-    return {"mercari_title": "", "mercari_description": "", "suggested_price": 0}
+    return {
+        "mercari_title": mercari_title,
+        "mercari_description": mercari_description,
+        "suggested_price": suggested_price,
+    }
 
 
 def scrape_one(url):
