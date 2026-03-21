@@ -18,17 +18,14 @@ def index():
 
 
 def generate_mercari_listing(product_info: dict) -> dict:
-    """Gemini APIを使ってメルカリ出品文を生成（無料枠あり）"""
+    """Gemini APIを使ってメルカリ出品文を生成（REST API直接呼び出し）"""
     import re
-    import google.generativeai as genai
+    import requests
 
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         print("GEMINI_API_KEY が設定されていません")
         return {"mercari_title": "", "mercari_description": "", "suggested_price": 0}
-
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
     title = product_info.get("title", "")
     price = product_info.get("price", "")
@@ -72,8 +69,11 @@ Amazon価格: {price}
 以下のJSON形式のみで返答してください（マークダウン不要）:
 {{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
 
-    response = model.generate_content(prompt)
-    text = response.text.strip()
+    url_api = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    resp = requests.post(url_api, json=payload, timeout=60)
+    resp.raise_for_status()
+    text = resp.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
     text = re.sub(r'^```json\s*', '', text)
     text = re.sub(r'\s*```$', '', text)
     json_match = re.search(r'\{.*\}', text, re.DOTALL)
@@ -132,14 +132,17 @@ def scrape_one(url):
 @app.route("/test_gemini")
 def test_gemini():
     try:
-        import google.generativeai as genai
+        import requests
         api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
-        response = model.generate_content("こんにちは")
-        return jsonify({"ok": True, "response": response.text[:100]})
+        url_api = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={api_key}"
+        payload = {"contents": [{"parts": [{"text": "こんにちは"}]}]}
+        resp = requests.post(url_api, json=payload, timeout=30)
+        if resp.status_code != 200:
+            return jsonify({"error": f"{resp.status_code}: {resp.text[:300]}"})
+        text = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        return jsonify({"ok": True, "response": text[:100]})
     except Exception as e:
         return jsonify({"error": str(e)})
 
