@@ -28,7 +28,7 @@ def generate_mercari_listing(product_info: dict) -> dict:
         return {"mercari_title": "", "mercari_description": "", "suggested_price": 0}
 
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    model = genai.GenerativeModel("gemini-1.5-flash-latest")
 
     title = product_info.get("title", "")
     price = product_info.get("price", "")
@@ -137,7 +137,7 @@ def test_gemini():
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-1.5-flash-latest")
         response = model.generate_content("こんにちは")
         return jsonify({"ok": True, "response": response.text[:100]})
     except Exception as e:
