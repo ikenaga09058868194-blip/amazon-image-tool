@@ -69,7 +69,7 @@ Amazon価格: {price}
 以下のJSON形式のみで返答してください（マークダウン不要）:
 {{"mercari_title": "タイトル", "mercari_description": "説明文", "suggested_price": 推奨価格の数字}}"""
 
-    url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={api_key}"
+    url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     resp = requests.post(url_api, json=payload, timeout=60)
     resp.raise_for_status()
@@ -139,7 +139,7 @@ def test_gemini():
         api_key = os.environ.get("GEMINI_API_KEY", "")
         if not api_key:
             return jsonify({"error": "GEMINI_API_KEY が設定されていません"})
-        url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-lite:generateContent?key={api_key}"
+        url_api = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
         payload = {"contents": [{"parts": [{"text": "こんにちは"}]}]}
         resp = requests.post(url_api, json=payload, timeout=30)
         if resp.status_code != 200:
