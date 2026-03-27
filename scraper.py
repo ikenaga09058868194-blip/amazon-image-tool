@@ -36,15 +36,21 @@ class AmazonScraper:
         images_dir.mkdir(parents=True, exist_ok=True)
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled"],
+            )
             context = await browser.new_context(
                 user_agent=(
                     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                     "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
+                    "Chrome/124.0.0.0 Safari/537.36"
                 ),
                 viewport={"width": 1440, "height": 900},
                 locale="ja-JP",
+            )
+            await context.add_init_script(
+                "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
             )
             page = await context.new_page()
 
